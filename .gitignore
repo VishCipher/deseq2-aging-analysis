@@ -2,7 +2,6 @@ data/*.csv
 data/*.tsv
 data/*.gz
 data/*.zip
-results/*.csv
 .Rhistory
 .RData
 *.html

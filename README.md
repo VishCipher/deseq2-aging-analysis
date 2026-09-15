@@ -32,7 +32,10 @@ Which genes and pathways are differentially expressed between young (20–34 yea
 - **Visualization:** Volcano plot (EnhancedVolcano), heatmap of top DEGs (pheatmap)
 - **Pathway enrichment:** Gene Set Enrichment Analysis (GSEA), GO Biological Process, via clusterProfiler's `gseGO()` - ranks the full gene list by DESeq2's Wald statistic rather than requiring a hard significance cutoff, chosen because very few genes clear the strict DE threshold (see volcano plot), leaving standard over-representation analysis with no real power
 
-> GO enrichment plots are only generated when the ranked gene list actually returns significant GSEA terms in that direction (positive or negative NES) - if `figures/04_GO_upregulated.png` or `05_GO_downregulated.png` is missing, that run found nothing significant for that direction, rather than the step having failed.
+> GO enrichment plots are only generated when the ranked gene list actually returns significant GSEA terms in that direction (positive or negative NES) - if `figures/04_GO_upregulated.png` or `05_GO_downregulated.png` is missing, that run found nothing significant for that direction, rather than the step having failed. 
+> Why GSEA and not standard enrichGO()? Standard GO over-representation analysis needs a list of individually-significant genes to test against a background. This dataset only produced a handful of genes passing the strict padj < 0.05, |log2FC| > 1 cutoff (see the volcano plot). Far too few for any GO term to survive correction across thousands of tested terms. GSEA sidesteps this: it ranks every tested gene by DESeq2's Wald statistic and asks whether GO gene sets skew toward either end of that full ranking, so it doesn't depend on how many genes individually cleared a hard threshold.
+
+GO enrichment plots are only generated when the ranked gene list actually returns significant GSEA terms in that direction (positive or negative NES) — if figures/04_GO_upregulated.png or 05_GO_downregulated.png is missing, that run found nothing significant for that direction, rather than the step having failed.
 
 ## Repository Structure
 

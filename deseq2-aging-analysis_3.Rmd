@@ -1,0 +1,353 @@
+---
+title: "Differential Expression Analysis: Skeletal Muscle Ageing"
+author: "Vishishtaa Pandit"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+## 1. Introduction
+
+This analysis investigates transcriptomic changes in human skeletal 
+muscle across age groups using publicly available RNA-seq data 
+(GSE164471, Tumasian et al., Nature Communications 2021).
+
+We compare gene expression between young (20-34 years) and old 
+(65+ years) individuals to identify ageing-associated pathways.
+
+## 2. Setup
+
+```{r libraries}
+library(DESeq2)
+library(tidyverse)
+library(pheatmap)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(EnhancedVolcano)
+```
+
+## 3. Load and Prepare Data
+
+```{r load_data}
+# Load count matrix
+counts_raw <- read.csv(
+  "data/GSE164471_GESTALT_Muscle_ENSG_counts_annotated.csv",
+  row.names = 1
+)
+
+# Preview
+dim(counts_raw)
+head(counts_raw[, 1:5])
+```
+
+```{r prepare_data}
+# Extract only COUNT columns (exclude annotation columns)
+count_cols <- grep("_COUNT$", colnames(counts_raw), value = TRUE)
+counts <- counts_raw[, count_cols]
+
+# Extract age group from column names
+# Column format: MUSCLE_AGE22_M_GROUP20_34_..._COUNT
+get_group <- function(colname) {
+  if (grepl("GROUP20_34", colname)) return("young")
+  if (grepl("GROUP65_79|GROUP80_PLUS", colname)) return("old")
+  return(NA)
+}
+
+groups <- sapply(colnames(counts), get_group)
+
+# Keep only young and old samples (drop middle-aged)
+keep_samples <- !is.na(groups)
+counts <- counts[, keep_samples]
+groups <- groups[keep_samples]
+
+# Build metadata table
+metadata <- data.frame(
+  condition = factor(groups, levels = c("young", "old")),
+  row.names = colnames(counts)
+)
+
+cat("Young samples:", sum(groups == "young"), "\n")
+cat("Old samples:", sum(groups == "old"), "\n")
+```
+
+## 4. Quality Control
+
+```{r deseq_object}
+# Build DESeq2 object
+dds <- DESeqDataSetFromMatrix(
+  countData = round(counts),  # DESeq2 needs integers
+  colData = metadata,
+  design = ~ condition
+)
+
+# Filter lowly expressed genes (keep genes with >10 counts in >3 samples)
+keep <- rowSums(counts(dds) >= 10) >= 3
+dds <- dds[keep, ]
+cat("Genes after filtering:", nrow(dds), "\n")
+```
+
+```{r pca_plot}
+# Variance stabilising transformation for QC
+vsd <- vst(dds, blind = TRUE)
+
+# PCA plot
+pca_plot <- plotPCA(vsd, intgroup = "condition") +
+  theme_minimal(base_size = 14) +
+  ggtitle("PCA: Young vs Old Skeletal Muscle") +
+  scale_color_manual(
+    values = c("young" = "#2196F3", "old" = "#F44336")
+  )
+
+print(pca_plot)
+
+ggsave("figures/01_pca_plot.png", 
+       plot = pca_plot,
+       width = 8, height = 6, 
+       dpi = 300)
+```
+
+## 5. Differential Expression Analysis
+
+```{r run_deseq}
+# Run DESeq2
+dds <- DESeq(dds)
+
+# Extract results: old vs young
+res <- results(dds,
+  contrast = c("condition", "old", "young"),
+  alpha = 0.05
+)
+
+summary(res)
+```
+
+```{r results_table}
+# Clean results table
+res_df <- as.data.frame(res) %>%
+  rownames_to_column("gene") %>%
+  filter(!is.na(padj)) %>%
+  arrange(padj)
+
+# Significant DEGs
+sig_genes <- res_df %>%
+  filter(padj < 0.05, abs(log2FoldChange) > 1)
+
+cat("Upregulated in old:", sum(sig_genes$log2FoldChange > 0), "\n")
+cat("Downregulated in old:", sum(sig_genes$log2FoldChange < 0), "\n")
+
+head(sig_genes, 20)
+```
+
+## 6. Visualisation
+
+```{r volcano_plot, fig.width=10, fig.height=8}
+volcano <- EnhancedVolcano(res_df,
+  lab = res_df$gene,
+  x = "log2FoldChange",
+  y = "padj",
+  title = "Old vs Young Skeletal Muscle",
+  subtitle = "DESeq2 | padj < 0.05 | |LFC| > 1",
+  pCutoff = 0.05,
+  FCcutoff = 1,
+  col = c("grey70", "grey70", "#2196F3", "#F44336"),
+  colAlpha = 0.6,
+  legendPosition = "bottom",
+  labSize = 3
+)
+
+print(volcano)
+
+ggsave("figures/02_volcano_plot.png",
+       plot = volcano,
+       width = 10, height = 8,
+       dpi = 300)
+```
+
+```{r heatmap, fig.width=10, fig.height=12}
+top40 <- sig_genes %>%
+  arrange(padj) %>%
+  head(40) %>%
+  pull(gene)
+
+mat <- assay(vsd)[top40, ]
+mat_scaled <- t(scale(t(mat)))
+
+annotation_col <- data.frame(
+  Condition = metadata$condition,
+  row.names = rownames(metadata)
+)
+
+ann_colors <- list(
+  Condition = c(young = "#2196F3", old = "#F44336")
+)
+
+# Save heatmap to file
+png("figures/03_heatmap.png", 
+    width = 10, height = 12, 
+    units = "in", res = 300)
+
+pheatmap(mat_scaled,
+  annotation_col = annotation_col,
+  annotation_colors = ann_colors,
+  show_colnames = FALSE,
+  cluster_cols = TRUE,
+  color = colorRampPalette(c("#2196F3", "white", "#F44336"))(100),
+  main = "Top 40 DEGs: Old vs Young Skeletal Muscle",
+  fontsize_row = 8
+)
+
+dev.off()
+
+# Also display in report
+pheatmap(mat_scaled,
+  annotation_col = annotation_col,
+  annotation_colors = ann_colors,
+  show_colnames = FALSE,
+  cluster_cols = TRUE,
+  color = colorRampPalette(c("#2196F3", "white", "#F44336"))(100),
+  main = "Top 40 DEGs: Old vs Young Skeletal Muscle",
+  fontsize_row = 8
+)
+```
+
+## 7. Pathway Enrichment
+
+With only a handful of genes passing the hard significance threshold (see
+volcano plot), standard over-representation analysis (`enrichGO`) has
+essentially no power — there aren't enough genes for any GO term to clear
+multiple-testing correction. Gene Set Enrichment Analysis (GSEA) is the more
+appropriate method here: it ranks *every* tested gene by a continuous score
+(the DESeq2 Wald statistic, which captures both effect size and significance)
+and asks whether GO gene sets are skewed toward the top or bottom of that
+full ranking, rather than requiring a hard in/out cutoff.
+
+```{r gsea_setup, fig.width=10, fig.height=10}
+# Build a fully ranked gene list for GSEA using the DESeq2 Wald statistic
+ranked_df <- res_df %>%
+  filter(!is.na(stat)) %>%
+  mutate(gene = sub("\\..*$", "", gene)) %>%  # strip any Ensembl version suffix, harmless if already clean
+  distinct(gene, .keep_all = TRUE) %>%
+  arrange(desc(stat))
+
+gene_list <- ranked_df$stat
+names(gene_list) <- ranked_df$gene
+
+cat("Total genes in ranked list for GSEA:", length(gene_list), "\n")
+
+set.seed(42)
+gsea_result <- gseGO(
+  geneList = gene_list,
+  OrgDb = org.Hs.eg.db,
+  keyType = "ENSEMBL",
+  ont = "BP",
+  pvalueCutoff = 0.05,
+  pAdjustMethod = "BH",
+  minGSSize = 10,
+  maxGSSize = 500,
+  eps = 0,
+  seed = TRUE
+)
+
+gsea_df <- as.data.frame(gsea_result)
+cat("Significant GSEA GO BP terms found (either direction):", nrow(gsea_df), "\n")
+```
+
+```{r gsea_up_plot, fig.width=10, fig.height=8}
+# Positive NES = enriched toward the upregulated-in-old end of the ranking
+up_terms <- gsea_df %>% filter(NES > 0) %>% arrange(p.adjust) %>% head(15)
+
+if (nrow(up_terms) > 0) {
+  p_up <- ggplot(up_terms, aes(x = NES, y = reorder(Description, NES),
+                                size = setSize, color = p.adjust)) +
+    geom_point() +
+    scale_color_gradient(low = "#F44336", high = "#2196F3") +
+    labs(title = "GSEA GO BP — Enriched in Aged Muscle (positive NES)",
+         x = "Normalized Enrichment Score (NES)", y = NULL,
+         color = "adj. p-value", size = "gene set size") +
+    theme_minimal(base_size = 12)
+  print(p_up)
+  ggsave("figures/04_GO_upregulated.png", plot = p_up,
+         width = 10, height = 8, dpi = 300)
+} else {
+  cat("No GO BP terms significantly enriched toward the upregulated direction.\n")
+}
+```
+
+```{r gsea_down_plot, fig.width=10, fig.height=8}
+# Negative NES = enriched toward the downregulated-in-old end of the ranking
+down_terms <- gsea_df %>% filter(NES < 0) %>% arrange(p.adjust) %>% head(15)
+
+if (nrow(down_terms) > 0) {
+  p_down <- ggplot(down_terms, aes(x = NES, y = reorder(Description, NES),
+                                    size = setSize, color = p.adjust)) +
+    geom_point() +
+    scale_color_gradient(low = "#F44336", high = "#2196F3") +
+    labs(title = "GSEA GO BP — Enriched in Aged Muscle (negative NES)",
+         x = "Normalized Enrichment Score (NES)", y = NULL,
+         color = "adj. p-value", size = "gene set size") +
+    theme_minimal(base_size = 12)
+  print(p_down)
+  ggsave("figures/05_GO_downregulated.png", plot = p_down,
+         width = 10, height = 8, dpi = 300)
+} else {
+  cat("No GO BP terms significantly enriched toward the downregulated direction.\n")
+}
+```
+
+
+## 8. GenAge Cross-Reference
+
+```{r genage}
+# Download GenAge from: https://genomics.senescence.info/genes/human.zip
+# Save the CSV as data/genage_human.csv first
+# Then uncomment and run:
+
+# genage <- read.csv("data/genage_human.csv")
+# genage_genes <- genage$HGNC.symbol
+# 
+# overlap <- sig_genes %>%
+#   filter(gene %in% genage_genes)
+# 
+# cat("DEGs overlapping with GenAge:", nrow(overlap), "\n")
+# 
+# ggplot(overlap, 
+#        aes(x = log2FoldChange, y = -log10(padj), label = gene)) +
+#   geom_point(aes(color = log2FoldChange > 0), size = 3) +
+#   geom_text(nudge_y = 0.05, size = 3) +
+#   scale_color_manual(
+#     values = c("TRUE" = "#F44336", "FALSE" = "#2196F3"),
+#     labels = c("Downregulated", "Upregulated")
+#   ) +
+#   theme_minimal() +
+#   labs(title = "GenAge genes differentially expressed with ageing")
+```
+
+## 9. Summary
+
+```{r summary}
+cat("=== Analysis Summary ===\n")
+cat("Dataset: GSE164471 - Skeletal Muscle Transcriptome in Healthy Aging\n")
+cat("Young samples (20-34 yrs):", sum(metadata$condition == "young"), "\n")
+cat("Old samples (65+ yrs):", sum(metadata$condition == "old"), "\n")
+cat("Genes tested:", nrow(res_df), "\n")
+cat("Significant DEGs (padj<0.05, |LFC|>1):", nrow(sig_genes), "\n")
+cat("Upregulated in aged:", sum(sig_genes$log2FoldChange > 0), "\n")
+cat("Downregulated in aged:", sum(sig_genes$log2FoldChange < 0), "\n")
+```
+
+## 10. Saving the DEG results in CSV
+
+```{r save_results}
+# Save significant DEGs table
+write.csv(sig_genes, 
+          "results/significant_DEGs.csv", 
+          row.names = FALSE)
+
+# Save full results table (all tested genes, not just significant ones)
+write.csv(res_df,
+          "results/full_DESeq2_results.csv",
+          row.names = FALSE)
+```

@@ -36,7 +36,7 @@ Which genes and pathways are differentially expressed between young (20–34 yea
 
 > Why GSEA and not standard enrichGO()? Standard GO over-representation analysis needs a list of individually-significant genes to test against a background. This dataset only produced a handful of genes passing the strict padj < 0.05, |log2FC| > 1 cutoff (see the volcano plot). Far too few for any GO term to survive correction across thousands of tested terms. GSEA sidesteps this: it ranks every tested gene by DESeq2's Wald statistic and asks whether GO gene sets skew toward either end of that full ranking, so it doesn't depend on how many genes individually cleared a hard threshold.
 
-GO enrichment plots are only generated when the ranked gene list actually returns significant GSEA terms in that direction (positive or negative NES) — if figures/04_GO_upregulated.png or 05_GO_downregulated.png is missing, that run found nothing significant for that direction, rather than the step having failed.
+GO enrichment plots are only generated when the ranked gene list actually returns significant GSEA terms in that direction (positive or negative NES) - if figures/04_GO_upregulated.png or 05_GO_downregulated.png is missing, that run found nothing significant for that direction, rather than the step having failed.
 
 ## Repository Structure
 
@@ -79,21 +79,21 @@ deseq2-aging-analysis/
 
 **What it means:** Terms further right (higher NES) and with smaller adjusted p-values are the pathways most strongly associated with the "increases with age" direction, using signal from the entire dataset rather than only the handful of genes that individually reached significance.
 
-*(Only present if this run's ranking returned significant positive-NES terms — see note above.)*
+*(Only present if this run's ranking returned significant positive-NES terms - see note above.)*
 
 ### Figure 5 - GSEA: Pathways Enriched Toward Downregulation in Aged Muscle
 ![GO Down](https://github.com/VishCipher/deseq2-aging-analysis/raw/main/figures/05_GO_downregulated.png)
 
-**What it is:** The same GSEA analysis, showing terms with significant negative NES — genes skewing toward the downregulated-in-old end of the ranking.
+**What it is:** The same GSEA analysis, showing terms with significant negative NES - genes skewing toward the downregulated-in-old end of the ranking.
 
 **What it means:** The "what's turning off" counterpart to Figure 4. Read together, Figures 4 and 5 give the pathway-level summary of aged vs. young muscle across the full dataset, beyond the small set of individually-significant genes in Figures 2–3.
 
-*(Only present if this run's ranking returned significant negative-NES terms — see note above.)*
+*(Only present if this run's ranking returned significant negative-NES terms - see note above.)*
 
 ## Results
 
-- [`results/significant_DEGs.csv`](./results/significant_DEGs.csv) — genes passing padj < 0.05 and |log2FC| > 1
-- [`results/full_DESeq2_results.csv`](./results/full_DESeq2_results.csv) — full DESeq2 output for every tested gene
+- [`results/significant_DEGs.csv`](./results/significant_DEGs.csv) - genes passing padj < 0.05 and |log2FC| > 1
+- [`results/full_DESeq2_results.csv`](./results/full_DESeq2_results.csv) - full DESeq2 output for every tested gene
 
 ## How to Reproduce
 

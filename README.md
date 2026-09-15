@@ -30,9 +30,9 @@ Which genes and pathways are differentially expressed between young (20–34 yea
 - **Quality control:** DESeq2 variance-stabilising transformation + PCA
 - **Differential expression:** DESeq2 (padj < 0.05, |log2FC| > 1)
 - **Visualization:** Volcano plot (EnhancedVolcano), heatmap of top DEGs (pheatmap)
-- **Pathway enrichment:** clusterProfiler GO Biological Process, run separately on the up- and downregulated gene sets
+- **Pathway enrichment:** Gene Set Enrichment Analysis (GSEA), GO Biological Process, via clusterProfiler's `gseGO()` — ranks the full gene list by DESeq2's Wald statistic rather than requiring a hard significance cutoff, chosen because very few genes clear the strict DE threshold (see volcano plot), leaving standard over-representation analysis with no real power
 
-> GO enrichment plots are only generated when a given gene set (up or down) actually returns significant enriched terms — if `figures/04_GO_upregulated.png` or `05_GO_downregulated.png` is missing, that run found nothing significant for that direction, rather than the step having failed.
+> GO enrichment plots are only generated when the ranked gene list actually returns significant GSEA terms in that direction (positive or negative NES) — if `figures/04_GO_upregulated.png` or `05_GO_downregulated.png` is missing, that run found nothing significant for that direction, rather than the step having failed.
 
 ## Repository Structure
 
@@ -68,23 +68,23 @@ deseq2-aging-analysis/
 
 **What it means:** This is a visual cross-check on the volcano plot — if the young and old samples split cleanly into two color blocks, it confirms these genes genuinely separate the two groups, rather than being driven by one or two unusual samples.
 
-### Figure 4 — GO Enrichment: Pathways Upregulated in Aged Muscle
+### Figure 4 — GSEA: Pathways Enriched Toward Upregulation in Aged Muscle
 ![GO Up](https://github.com/VishCipher/deseq2-aging-analysis/raw/main/figures/04_GO_upregulated.png)
 
-**What it is:** GO Biological Process terms significantly enriched among the upregulated DEGs (clusterProfiler, BH-adjusted p < 0.05), shown as a dot plot.
+**What it is:** GO Biological Process terms with significant positive Normalized Enrichment Score (NES) from GSEA — meaning their member genes skew toward the upregulated-in-old end of the full ranked gene list, not just genes that individually passed a significance cutoff.
 
-**What it means:** Instead of looking at genes one at a time, this asks "what biological processes, as a group, are turning on with age?" — the terms shown are the ones the upregulated gene set is most strongly associated with.
+**What it means:** Terms further right (higher NES) and with smaller adjusted p-values are the pathways most strongly associated with the "increases with age" direction, using signal from the entire dataset rather than only the handful of genes that individually reached significance.
 
-*(Only present if this run's upregulated gene set returned significant enriched terms — see note above.)*
+*(Only present if this run's ranking returned significant positive-NES terms — see note above.)*
 
-### Figure 5 — GO Enrichment: Pathways Downregulated in Aged Muscle
+### Figure 5 — GSEA: Pathways Enriched Toward Downregulation in Aged Muscle
 ![GO Down](https://github.com/VishCipher/deseq2-aging-analysis/raw/main/figures/05_GO_downregulated.png)
 
-**What it is:** The same enrichment analysis, restricted to the downregulated gene set.
+**What it is:** The same GSEA analysis, showing terms with significant negative NES — genes skewing toward the downregulated-in-old end of the ranking.
 
-**What it means:** The "what's turning off" counterpart to Figure 4. Read together, Figures 4 and 5 give the pathway-level summary of aged vs. young muscle, beyond the individual genes in Figures 2–3.
+**What it means:** The "what's turning off" counterpart to Figure 4. Read together, Figures 4 and 5 give the pathway-level summary of aged vs. young muscle across the full dataset, beyond the small set of individually-significant genes in Figures 2–3.
 
-*(Only present if this run's downregulated gene set returned significant enriched terms — see note above.)*
+*(Only present if this run's ranking returned significant negative-NES terms — see note above.)*
 
 ## Results
 
